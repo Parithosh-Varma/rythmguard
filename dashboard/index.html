@@ -1,0 +1,53 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<title>PulseGuard — live</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+body{font-family:system-ui,sans-serif;background:#0b1116;color:#d7e3ea;margin:0;padding:16px}
+h1{font-size:20px;margin:0 0 4px}.sub{color:#8aa0ad;font-size:12px;margin-bottom:12px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;max-width:1000px}
+.card{background:#131c23;border:1px solid #22303a;border-radius:10px;padding:12px}
+canvas{width:100%;height:180px;background:#0b1116;border-radius:6px}
+.big{font-size:28px;font-weight:700}.ok{color:#4ade80}.bad{color:#f87171}
+pre{font-size:11px;max-height:180px;overflow:auto;background:#0b1116;padding:8px;border-radius:6px}
+.warn{background:#3a2a00;border:1px solid #8a6d00;color:#ffd75e;padding:8px 12px;border-radius:8px;font-size:12px;margin-bottom:12px}
+</style></head>
+<body>
+<h1>PulseGuard — Self-Healing Real-Time Medical Controller</h1>
+<div class="sub">SIMULATION ONLY — not a medical device · QNX Global Hackathon · target jitter &lt; 100 µs on QNX 8.0</div>
+<div class="warn">Host sim is best-effort timing. Hard numbers come from the QNX 8.0 / QEMU target.</div>
+<div class="grid">
+<div class="card"><h3>Jitter (µs, last 120 ticks)</h3><canvas id="jit" width="460" height="180"></canvas>
+<div id="nums" class="big">…</div><div id="meta" class="sub">…</div></div>
+<div class="card"><h3>Pressure (cmH₂O, synthetic)</h3><canvas id="wave" width="460" height="180"></canvas>
+<div id="safe" class="big">…</div></div>
+</div>
+<div class="card" style="margin-top:12px;max-width:1000px"><h3>Fault log</h3><pre id="log">…</pre></div>
+<script>
+const jit=document.getElementById('jit').getContext('2d'),
+      wave=document.getElementById('wave').getContext('2d');
+let pressures=[];
+async function tick(){
+  try{
+    const r=await fetch('http://localhost:8080/api/stats').then(r=>r.json());
+    const L=r.latest||{}, H=r.jitter_hist||[];
+    document.getElementById('nums').innerHTML=
+      `jitter <span class="${(L.jitter_us_last||0)>100?'bad':'ok'}">${(L.jitter_us_last||0).toFixed(1)} µs</span>`+
+      ` · misses <span class="${(L.deadline_misses||0)>0?'bad':'ok'}">${L.deadline_misses||0}</span>`;
+    document.getElementById('meta').textContent=
+      `max ${(L.jitter_us_max||0).toFixed(1)} µs · out ${(L.control_out||0).toFixed(1)} · seq ${L.seq||0}`;
+    document.getElementById('safe').innerHTML=L.safe_mode?'SAFE MODE <span class="bad">●</span>':'NOMINAL <span class="ok">●</span>';
+    pressures.push(L.pressure||0); if(pressures.length>120)pressures.shift();
+    draw(jit,H,100,'#4ade80'); draw(wave,pressures,20,'#60a5fa');
+    const log=await fetch('http://localhost:8080/api/log').then(r=>r.json());
+    document.getElementById('log').textContent=log.join('\n')||'(empty)';
+  }catch(e){document.getElementById('nums').textContent='telemetry unreachable — is run-host.sh up?';}
+}
+function draw(c,data,max,color){
+  c.clearRect(0,0,460,180);c.strokeStyle='#22303a';c.beginPath();c.moveTo(0,180-(100/max*180));c.lineTo(460,180-(100/max*180));c.stroke();
+  c.strokeStyle=color;c.beginPath();
+  data.forEach((v,i)=>{const x=i/120*460,y=180-Math.min(v,max)/max*170;i?c.lineTo(x,y):c.moveTo(x,y);});
+  c.stroke();
+}
+setInterval(tick,500);tick();
+</script></body></html>
