@@ -1,53 +1,169 @@
 <!doctype html>
-<html><head><meta charset="utf-8">
-<title>PulseGuard — live</title>
+<html lang="en"><head><meta charset="utf-8">
+<title>PulseGuard — live monitor</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="icon" href="data:,">
 <style>
-body{font-family:system-ui,sans-serif;background:#0b1116;color:#d7e3ea;margin:0;padding:16px}
-h1{font-size:20px;margin:0 0 4px}.sub{color:#8aa0ad;font-size:12px;margin-bottom:12px}
-.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;max-width:1000px}
-.card{background:#131c23;border:1px solid #22303a;border-radius:10px;padding:12px}
-canvas{width:100%;height:180px;background:#0b1116;border-radius:6px}
-.big{font-size:28px;font-weight:700}.ok{color:#4ade80}.bad{color:#f87171}
-pre{font-size:11px;max-height:180px;overflow:auto;background:#0b1116;padding:8px;border-radius:6px}
-.warn{background:#3a2a00;border:1px solid #8a6d00;color:#ffd75e;padding:8px 12px;border-radius:8px;font-size:12px;margin-bottom:12px}
+:root{
+  --ground:#07100e; --panel:#0b1714; --rule:#1d2f2a;
+  --ink:#e9f2ed; --dim:#7fa398; --faint:#48645c;
+  --trace:#34e89e; --amber:#ffb02e; --red:#ff5348;
+  --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}
+body{background:var(--ground);color:var(--ink);margin:0;
+  font-family:-apple-system,BlinkMacSystemFont,"Helvetica Neue",Inter,sans-serif;
+  -webkit-font-smoothing:antialiased}
+.wrap{max-width:1240px;margin:0 auto;padding:20px 24px 32px}
+/* header strip */
+.strip{display:flex;align-items:center;gap:14px;border-bottom:1px solid var(--rule);
+  padding:10px 2px 14px;margin-bottom:18px}
+.lamp{width:10px;height:10px;border-radius:50%;background:var(--trace);flex:none}
+.lamp.safe{background:var(--amber)}.lamp.dead{background:var(--red)}
+.brand{font-weight:800;letter-spacing:.22em;font-size:13px}
+.brand small{color:var(--dim);font-weight:600}
+.clock{margin-left:auto;font-family:var(--mono);font-size:13px;color:var(--dim);
+  font-variant-numeric:tabular-nums}
+.simtag{font-size:10px;letter-spacing:.18em;color:var(--ground);background:var(--amber);
+  padding:3px 8px;font-weight:800}
+/* layout */
+.grid{display:grid;grid-template-columns:8fr 4fr;gap:0;border:1px solid var(--rule)}
+.scope{padding:16px 18px;border-right:1px solid var(--rule);min-width:0}
+.rail{padding:16px 18px;background:var(--panel);min-width:0}
+.eyebrow{font-size:10px;letter-spacing:.22em;color:var(--dim);font-weight:700;margin:0 0 10px}
+.eyebrow b{color:var(--ink)}
+canvas{display:block;width:100%}
+#wave{height:230px;background:var(--ground)}
+#bars{height:120px;background:var(--ground);margin-top:6px}
+.readrow{display:flex;align-items:baseline;gap:10px;margin-top:10px}
+.big{font-family:var(--mono);font-size:30px;font-weight:700;font-variant-numeric:tabular-nums}
+.unit{font-size:11px;color:var(--dim);letter-spacing:.08em}
+.hr{border:0;border-top:1px solid var(--rule);margin:16px -18px}
+/* the number this project exists to keep at zero */
+.misses{padding:14px 0 4px}
+.misses .n{font-family:var(--mono);font-size:84px;line-height:1;font-weight:700;
+  color:var(--trace);font-variant-numeric:tabular-nums}
+.misses.bad .n{color:var(--red)}
+.misses .cap{font-size:11px;letter-spacing:.14em;color:var(--dim);margin-top:6px;line-height:1.5}
+.stat{display:flex;justify-content:space-between;align-items:baseline;padding:7px 0;
+  border-top:1px solid var(--rule);font-size:13px}
+.stat .k{color:var(--dim)}
+.stat .v{font-family:var(--mono);font-variant-numeric:tabular-nums}
+/* fault tape */
+.tape{border:1px solid var(--rule);border-top:0;background:#050c0a}
+.tape header{display:flex;align-items:center;gap:12px;padding:12px 18px 0}
+.cmds{display:flex;gap:8px;margin-left:auto}
+.cmds button{background:none;border:1px solid var(--rule);color:var(--dim);
+  font-family:var(--mono);font-size:11px;padding:5px 10px;cursor:pointer}
+.cmds button:hover{color:var(--ink);border-color:var(--faint)}
+.cmds button:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+#log{font-family:var(--mono);font-size:12px;line-height:1.7;margin:8px 0 0;
+  padding:4px 18px 16px;max-height:190px;overflow:auto;white-space:pre-wrap}
+#log .t{color:var(--faint)}
+footer{margin-top:14px;font-size:11px;color:var(--faint);line-height:1.6}
+footer b{color:var(--dim)}
+@media (max-width:860px){.grid{grid-template-columns:1fr}.scope{border-right:0;border-bottom:1px solid var(--rule)}}
+@media (prefers-reduced-motion:reduce){.lamp{animation:none}}
 </style></head>
-<body>
-<h1>PulseGuard — Self-Healing Real-Time Medical Controller</h1>
-<div class="sub">SIMULATION ONLY — not a medical device · QNX Global Hackathon · target jitter &lt; 100 µs on QNX 8.0</div>
-<div class="warn">Host sim is best-effort timing. Hard numbers come from the QNX 8.0 / QEMU target.</div>
-<div class="grid">
-<div class="card"><h3>Jitter (µs, last 120 ticks)</h3><canvas id="jit" width="460" height="180"></canvas>
-<div id="nums" class="big">…</div><div id="meta" class="sub">…</div></div>
-<div class="card"><h3>Pressure (cmH₂O, synthetic)</h3><canvas id="wave" width="460" height="180"></canvas>
-<div id="safe" class="big">…</div></div>
+<body><div class="wrap">
+  <div class="strip">
+    <span class="lamp" id="lamp"></span>
+    <div class="brand">PULSEGUARD <small>/ self-healing real-time controller</small></div>
+    <span class="simtag">SIMULATION ONLY</span>
+    <span class="clock" id="clock">--:--:--</span>
+  </div>
+  <div class="grid">
+    <div class="scope">
+      <p class="eyebrow">AIRWAY PRESSURE · cmH₂O · SYNTHETIC PATIENT</p>
+      <canvas id="wave" width="760" height="230"></canvas>
+      <div class="readrow"><span class="big" id="pnow">–</span><span class="unit">cmH₂O now</span>
+        <span class="unit" id="ctl" style="margin-left:auto"></span></div>
+      <hr class="hr">
+      <p class="eyebrow">SCHEDULING JITTER · µs · LAST 60 TICKS · <b>QNX TARGET &lt; 100</b></p>
+      <canvas id="bars" width="760" height="120"></canvas>
+      <div class="readrow"><span class="big" id="jnow">–</span><span class="unit">µs last tick</span>
+        <span class="unit" id="jp95" style="margin-left:auto"></span></div>
+    </div>
+    <div class="rail">
+      <p class="eyebrow">CONTROLLER STATE</p>
+      <div class="misses" id="missbox"><div class="n" id="miss">–</div>
+        <div class="cap">DEADLINE MISSES —<br>THE NUMBER THIS PROJECT<br>EXISTS TO KEEP AT ZERO</div></div>
+      <div class="stat"><span class="k">mode</span><span class="v" id="mode">…</span></div>
+      <div class="stat"><span class="k">control out</span><span class="v" id="out">…</span></div>
+      <div class="stat"><span class="k">jitter max</span><span class="v" id="jmax">…</span></div>
+      <div class="stat"><span class="k">loop seq</span><span class="v" id="seq">…</span></div>
+      <div class="stat"><span class="k">monitor uptime</span><span class="v" id="up">…</span></div>
+    </div>
+  </div>
+  <div class="tape">
+    <header><p class="eyebrow" style="margin:0">FAULT LOG · WATCHDOG + INJECTOR</p>
+      <span class="cmds">
+        <button data-cmd="./build/fault_injector --kill sensor">kill sensor</button>
+        <button data-cmd="./build/fault_injector --cpu 4 --secs 10">cpu storm</button>
+      </span></header>
+    <div id="log">waiting for telemetry…</div>
+  </div>
+  <footer><b>Host sim timing is best-effort.</b> Hard numbers (&lt;100&nbsp;µs jitter, 0 misses under
+  storm) come from the QNX&nbsp;8.0 / QEMU target — <b>cat /dev/pulseguard/status</b> there,
+  <b>state/status</b> here. Not a medical device.</footer>
 </div>
-<div class="card" style="margin-top:12px;max-width:1000px"><h3>Fault log</h3><pre id="log">…</pre></div>
 <script>
-const jit=document.getElementById('jit').getContext('2d'),
-      wave=document.getElementById('wave').getContext('2d');
-let pressures=[];
-async function tick(){
+const $=id=>document.getElementById(id);
+const wctx=$('wave').getContext('2d'), bctx=$('bars').getContext('2d');
+let P=new Array(240).fill(10), J=[], latest={}, sweep=0, t0=Date.now();
+setInterval(()=>{const d=new Date();$('clock').textContent=d.toTimeString().slice(0,8);},1000);
+document.querySelectorAll('.cmds button').forEach(b=>b.onclick=()=>navigator.clipboard.writeText(b.dataset.cmd));
+async function poll(){
   try{
     const r=await fetch('http://localhost:8080/api/stats').then(r=>r.json());
-    const L=r.latest||{}, H=r.jitter_hist||[];
-    document.getElementById('nums').innerHTML=
-      `jitter <span class="${(L.jitter_us_last||0)>100?'bad':'ok'}">${(L.jitter_us_last||0).toFixed(1)} µs</span>`+
-      ` · misses <span class="${(L.deadline_misses||0)>0?'bad':'ok'}">${L.deadline_misses||0}</span>`;
-    document.getElementById('meta').textContent=
-      `max ${(L.jitter_us_max||0).toFixed(1)} µs · out ${(L.control_out||0).toFixed(1)} · seq ${L.seq||0}`;
-    document.getElementById('safe').innerHTML=L.safe_mode?'SAFE MODE <span class="bad">●</span>':'NOMINAL <span class="ok">●</span>';
-    pressures.push(L.pressure||0); if(pressures.length>120)pressures.shift();
-    draw(jit,H,100,'#4ade80'); draw(wave,pressures,20,'#60a5fa');
+    latest=r.latest||{};
+    if(latest.pressure!=null){P.push(latest.pressure);if(P.length>240)P.shift();}
+    J=(r.jitter_hist||[]).slice(-60);
+    $('pnow').textContent=(latest.pressure??0).toFixed(1);
+    $('ctl').textContent='control out '+(latest.control_out??0).toFixed(1)+' · flow '+(latest.flow??0).toFixed(0)+' L/min';
+    $('jnow').textContent=(latest.jitter_us_last??0).toFixed(0);
+    const s=[...J].sort((a,b)=>a-b);
+    $('jp95').textContent=s.length?('p95 '+s[Math.floor(s.length*.95)].toFixed(0)+' µs · max '+(latest.jitter_us_max??0).toFixed(0)+' µs'):'';
+    $('miss').textContent=latest.deadline_misses??'–';
+    $('missbox').classList.toggle('bad',(latest.deadline_misses||0)>0);
+    const safe=!!latest.safe_mode;
+    $('mode').textContent=latest.error?'LINK DOWN':(safe?'SAFE MODE':'NOMINAL');
+    $('mode').style.color=latest.error?'var(--red)':(safe?'var(--amber)':'var(--trace)');
+    $('lamp').className='lamp'+(latest.error?' dead':(safe?' safe':''));
+    $('out').textContent=(latest.control_out??0).toFixed(1);
+    $('jmax').textContent=(latest.jitter_us_max??0).toFixed(0)+' µs';
+    $('seq').textContent=latest.seq??'…';
+    const up=Math.floor((Date.now()-t0)/1000);
+    $('up').textContent=Math.floor(up/60)+'m '+String(up%60).padStart(2,'0')+'s';
     const log=await fetch('http://localhost:8080/api/log').then(r=>r.json());
-    document.getElementById('log').textContent=log.join('\n')||'(empty)';
-  }catch(e){document.getElementById('nums').textContent='telemetry unreachable — is run-host.sh up?';}
+    $('log').innerHTML=log.length?log.map(l=>l.replace('[inject]','<b style="color:var(--amber)">[inject]</b>')).join('\n'):'no faults injected yet — press a button above to copy the command, run it in a terminal.';
+  }catch(e){$('mode').textContent='LINK DOWN';$('mode').style.color='var(--red)';$('lamp').className='lamp dead';}
 }
-function draw(c,data,max,color){
-  c.clearRect(0,0,460,180);c.strokeStyle='#22303a';c.beginPath();c.moveTo(0,180-(100/max*180));c.lineTo(460,180-(100/max*180));c.stroke();
-  c.strokeStyle=color;c.beginPath();
-  data.forEach((v,i)=>{const x=i/120*460,y=180-Math.min(v,max)/max*170;i?c.lineTo(x,y):c.moveTo(x,y);});
-  c.stroke();
+function frame(){
+  sweep+=2;
+  // waveform: dim history + bright sweep head
+  wctx.clearRect(0,0,760,230);
+  const y=v=>210-Math.min(Math.max(v,0),25)/25*190;
+  wctx.strokeStyle='#1d2f2a';wctx.beginPath();wctx.moveTo(0,y(10));wctx.lineTo(760,y(10));wctx.stroke();
+  if(P.length>1){
+    wctx.strokeStyle='rgba(52,232,158,.30)';wctx.lineWidth=2;wctx.beginPath();
+    P.forEach((v,i)=>{const x=i/240*760;i?wctx.lineTo(x,y(v)):wctx.moveTo(x,y(v));});wctx.stroke();
+    const n=Math.min(P.length,28);wctx.strokeStyle='#34e89e';wctx.lineWidth=2.5;wctx.beginPath();
+    P.slice(-n).forEach((v,k)=>{const x=(P.length-n+k)/240*760;k?wctx.lineTo(x,y(v)):wctx.moveTo(x,y(v));});wctx.stroke();
+    const lx=(P.length-1)/240*760,ly=y(P[P.length-1]);
+    wctx.fillStyle='#34e89e';wctx.fillRect(lx-1.5,ly-1.5,3,3);
+  }
+  // jitter bars with 100µs target line
+  bctx.clearRect(0,0,760,120);
+  const max=Math.max(120,...J,100)*1.15, bx=v=>114-Math.min(v,max)/max*104;
+  bctx.strokeStyle='#ffb02e';bctx.setLineDash([5,4]);bctx.beginPath();
+  bctx.moveTo(0,bx(100));bctx.lineTo(760,bx(100));bctx.stroke();bctx.setLineDash([]);
+  bctx.fillStyle='#ffb02e';
+  J.forEach((v,i)=>{const h=114-bx(v);bctx.fillRect(i*(760/60)+1,114-h,760/60-2,h);});
+  bctx.fillStyle='#07100e';bctx.fillRect(6,bx(100)-15,118,14);
+  bctx.fillStyle='#ffb02e';bctx.font='10px ui-monospace,monospace';
+  bctx.fillText('100µs QNX target',8,bx(100)-4);
+  requestAnimationFrame(frame);
 }
-setInterval(tick,500);tick();
+setInterval(poll,500);poll();requestAnimationFrame(frame);
 </script></body></html>
